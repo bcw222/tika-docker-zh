@@ -1,0 +1,91 @@
+name: Publish Chinese-OCR overlay to GHCR
+
+# Builds a thin overlay on top of the official apache/tika:<v>-full images
+# and pushes ghcr.io/<owner>/tika-ocr-zh:<v> (plus :latest).
+# Triggered by release-style tags (3.3.0.0, v4.0.0.0, ...) or manually.
+
+on:
+  push:
+    tags:
+      - "[0-9]*.[0-9]*.[0-9]*"
+      - "v[0-9]*.[0-9]*.[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tika_version:
+        description: "Upstream apache/tika version, e.g. 3.3.0.0 or 4.0.0.0"
+        required: true
+        type: string
+      platforms:
+        description: "Comma-separated build platforms"
+        required: false
+        type: string
+        default: "linux/amd64,linux/arm64"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: tika
+  BASE_REPO: docker.io/apache/tika
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive version and image reference
+        id: calc
+        env:
+          INPUT_VERSION: ${{ inputs.tika_version || github.ref_name }}
+        run: |
+          set -euo pipefail
+          raw="${INPUT_VERSION}"
+          raw="${raw#v}"  # tolerate a leading "v"
+          if [[ -z "${raw}" ]]; then
+            echo "::error::No version provided" >&2
+            exit 1
+          fi
+          owner="${GITHUB_REPOSITORY_OWNER,,}"  # lowercase for GHCR
+          echo "version=${raw}" >> "$GITHUB_OUTPUT"
+          echo "image=${REGISTRY}/${owner}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        env:
+          IMAGE: ${{ steps.calc.outputs.image }}
+          VERSION: ${{ steps.calc.outputs.version }}
+        run: |
+          set -euo pipefail
+          tags="${IMAGE}:${VERSION}"$'\n'"${IMAGE}:latest"
+          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${tags}" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push overlay
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            BASE_IMAGE=${{ env.BASE_REPO }}:${{ steps.calc.outputs.version }}-full
+          cache-from: type=gha,scope=overlay
+          cache-to: type=gha,mode=max,scope=overlay
