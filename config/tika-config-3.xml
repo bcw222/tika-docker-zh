@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Default config baked into the 3.x overlay: Tesseract OCR uses
+  chi_sim + chi_tra with eng fallback. 3.x expects XML tika-config
+  (JSON config support only landed in 4.x, TIKA-4544), and 4.x in turn
+  stopped loading classpath TesseractOCRConfig.properties (TIKA-4842),
+  hence one config per generation selected at build time.
+  Users override by passing their own -c /tika-config.xml.
+-->
+<properties>
+  <parsers>
+    <parser class="org.apache.tika.parser.ocr.TesseractOCRParser">
+      <params>
+        <param name="language" type="string">chi_sim+chi_tra+eng</param>
+      </params>
+    </parser>
+    <parser class="org.apache.tika.parser.DefaultParser"/>
+  </parsers>
+</properties>

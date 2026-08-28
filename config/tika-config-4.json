@@ -1,0 +1,11 @@
+{
+  "_comment": "Default config baked into the 4.x overlay: Tesseract OCR uses chi_sim + chi_tra with eng fallback. Users override by passing their own -c /tika-config.json.",
+  "parsers": [
+    { "default-parser": {} },
+    {
+      "tesseract-ocr-parser": {
+        "language": "chi_sim+chi_tra+eng"
+      }
+    }
+  ]
+}
